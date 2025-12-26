@@ -41,8 +41,10 @@ const resultTitle = document.getElementById('result-title');
 const resultMovieTitle = document.getElementById('result-movie-title');
 const resultMessage = document.getElementById('result-message');
 const posterReveal = document.getElementById('poster-reveal');
+
 const nextMovieBtn = document.getElementById('next-movie-btn');
 const suggestionsList = document.getElementById('suggestions-list');
+const tmdbLink = document.getElementById('tmdb-link');
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {

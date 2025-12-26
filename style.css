@@ -228,6 +228,20 @@ button:active {
     font-weight: 500;
 }
 
+.api-link {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-decoration: none;
+    border-bottom: 1px dashed var(--text-muted);
+    align-self: center;
+    transition: color 0.2s;
+}
+
+.api-link:hover {
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
 /* Game Screen */
 .game-header {
     display: flex;
