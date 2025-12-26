@@ -22,6 +22,26 @@
                 <p>Devinez le film à partir de ses décors.</p>
                 <div class="input-group">
                     <input type="text" id="api-key-input" placeholder="Entrez votre clé API TMDB">
+
+                    <div class="settings-group">
+                        <div class="setting-item">
+                            <label for="rounds-select">Manches</label>
+                            <select id="rounds-select">
+                                <option value="10">10 Films</option>
+                                <option value="20">20 Films</option>
+                                <option value="30">30 Films</option>
+                                <option value="Infinity">Infini</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <label for="genre-select">Thème</label>
+                            <select id="genre-select">
+                                <option value="">Tous les genres</option>
+                                <!-- Genres will be populated by JS -->
+                            </select>
+                        </div>
+                    </div>
+
                     <button id="start-btn" class="btn-primary">Commencer</button>
                     <p class="error-msg" id="login-error"></p>
                 </div>
@@ -32,8 +52,11 @@
         <!-- Game Screen -->
         <section id="game-screen" class="screen hidden">
             <div class="game-header">
-                <div class="score-board">Score: <span id="current-score">0</span></div>
-                <button id="reset-key-btn" class="btn-text">Changer Clé API</button>
+                <div>
+                    <span class="score-board">Score: <span id="current-score">0</span></span>
+                    <span class="round-indicator" id="round-indicator" style="margin-left: 15px; color: #888;"></span>
+                </div>
+                <button id="reset-key-btn" class="btn-text">Quitter</button>
             </div>
 
             <div class="image-container">

@@ -9,6 +9,11 @@ let currentBackdrops = [];
 let currentImageIndex = 0;
 let score = 0;
 
+// New State for Challenge Mode
+let maxRounds = Infinity;
+let currentRound = 0;
+let selectedGenre = '';
+
 // DOM Elements
 const loginScreen = document.getElementById('login-screen');
 const gameScreen = document.getElementById('game-screen');
@@ -25,6 +30,11 @@ const currentScoreEl = document.getElementById('current-score');
 const resetKeyBtn = document.getElementById('reset-key-btn');
 const bgOverlay = document.querySelector('.background-overlay');
 
+// Settings Elements
+const roundsSelect = document.getElementById('rounds-select');
+const genreSelect = document.getElementById('genre-select');
+const roundIndicator = document.getElementById('round-indicator');
+
 // Modal Elements
 const resultModal = document.getElementById('result-modal');
 const resultTitle = document.getElementById('result-title');
@@ -39,13 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const storedKey = localStorage.getItem('tmdb_api_key');
     if (storedKey) {
         apiKey = storedKey;
-        testApiKey(apiKey).then(isValid => {
-            if (isValid) {
-                showGameScreen();
-            } else {
-                localStorage.removeItem('tmdb_api_key');
-            }
-        });
+        apiKeyInput.value = apiKey;
+        // Verify key and populate genres
+        fetchGenres(apiKey);
     }
 });
 
@@ -64,13 +70,15 @@ startBtn.addEventListener('click', async () => {
     if (isValid) {
         apiKey = key;
         localStorage.setItem('tmdb_api_key', apiKey);
-        showGameScreen();
+
+        // Fetch genres just in case, then start
+        await fetchGenres(apiKey);
+        startGame();
     } else {
         showLoginError('Clé API invalide. Vérifiez-la sur TMDB.');
+        startBtn.disabled = false;
+        startBtn.textContent = 'Commencer';
     }
-
-    startBtn.disabled = false;
-    startBtn.textContent = 'Commencer';
 });
 
 resetKeyBtn.addEventListener('click', () => {
@@ -78,10 +86,9 @@ resetKeyBtn.addEventListener('click', () => {
     location.reload();
 });
 
+// Event Listeners for Game
 nextHintBtn.addEventListener('click', showNextImage);
-skipBtn.addEventListener('click', handleSkip);
-
-
+skipBtn.addEventListener('click', () => handleRoundEnd(false, true)); // Treat skip as loss
 submitGuessBtn.addEventListener('click', checkGuess);
 guessInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') checkGuess();
@@ -97,10 +104,56 @@ document.addEventListener('click', (e) => {
 
 nextMovieBtn.addEventListener('click', () => {
     resultModal.classList.add('hidden');
-    startNewRound();
+
+    // Check if game over
+    if (maxRounds !== Infinity && currentRound >= maxRounds) {
+        showGameOver();
+    } else {
+        startNewRound();
+    }
 });
 
-// Logic
+// App Logic
+async function initApp(key) {
+    // Populate genres
+    await fetchGenres(key);
+
+    // If key was just entered, update UI immediately? 
+    // Actually we stay on login screen to let user choose settings
+    // But if auto-login, we might wait on login screen? 
+    // The requirement implies we choose settings before starting.
+    // So if stored key exists, we just unlock the form?
+    // Let's modify behavior: if stored key, fill input, verify silently, fetch genres.
+    // User still needs to click "Start" to choose settings.
+
+    // If we are auto-logging in (from DOMContentLoaded):
+    if (document.getElementById('login-screen').classList.contains('active')) {
+        apiKeyInput.value = key;
+        // We don't auto-start because we want them to pick options
+        // Just fetch genres
+    } else {
+        // If clicked start button
+        startGame();
+    }
+}
+
+async function fetchGenres(key) {
+    try {
+        const res = await fetch(`${TMDB_BASE_URL}/genre/movie/list?api_key=${key}&language=fr-FR`);
+        const data = await res.json();
+
+        genreSelect.innerHTML = '<option value="">Tous les genres</option>';
+        data.genres.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.textContent = g.name;
+            genreSelect.appendChild(opt);
+        });
+    } catch (e) {
+        console.error("Failed to fetch genres", e);
+    }
+}
+
 async function testApiKey(key) {
     try {
         const res = await fetch(`${TMDB_BASE_URL}/authentication/token/new?api_key=${key}`);
@@ -111,70 +164,75 @@ async function testApiKey(key) {
     }
 }
 
-function showLoginError(msg) {
-    loginError.textContent = msg;
-    apiKeyInput.classList.add('error'); // Ensure CSS handles this if wanted
-    setTimeout(() => loginError.textContent = '', 3000);
-}
+function startGame() {
+    // Read Settings
+    const roundsVal = roundsSelect.value;
+    maxRounds = roundsVal === 'Infinity' ? Infinity : parseInt(roundsVal);
+    selectedGenre = genreSelect.value;
 
-function showGameScreen() {
+    score = 0;
+    currentRound = 0;
+    currentScoreEl.textContent = score;
+
     loginScreen.classList.add('hidden');
     gameScreen.classList.remove('hidden');
     startNewRound();
 }
 
+function showLoginError(msg) {
+    loginError.textContent = msg;
+    apiKeyInput.classList.add('error');
+    setTimeout(() => loginError.textContent = '', 3000);
+}
+
+// Game Logic
 async function startNewRound() {
-    resetGameState();
+    currentRound++;
+    updateRoundIndicator();
+
+    resetRoundState();
     showLoading();
 
     try {
-        // 1. Get a random page of popular movies (total_pages usually capped at 500 by TMDB for this list)
-        // We pick a random page between 1 and 100 to stick to relatively known movies
+        // Fetch logic with Genre
+        const genreParam = selectedGenre ? `&with_genres=${selectedGenre}` : '';
         const randomPage = Math.floor(Math.random() * 50) + 1;
 
-        const listRes = await fetch(`${TMDB_BASE_URL}/movie/popular?api_key=${apiKey}&language=fr-FR&page=${randomPage}`);
+        const listRes = await fetch(`${TMDB_BASE_URL}/discover/movie?api_key=${apiKey}&language=fr-FR&page=${randomPage}&sort_by=popularity.desc&include_adult=false${genreParam}`);
         const listData = await listRes.json();
 
         if (!listData.results || listData.results.length === 0) {
             throw new Error('No movies found');
         }
 
-        // 2. Pick a random movie
         const randomIndex = Math.floor(Math.random() * listData.results.length);
         const movieBasic = listData.results[randomIndex];
 
-        // 3. Get images for that movie (en includes most backdrops, we can filter for null iso_639_1 too)
+        // Get images
         const imagesRes = await fetch(`${TMDB_BASE_URL}/movie/${movieBasic.id}/images?api_key=${apiKey}&include_image_language=en,null`);
         const imagesData = await imagesRes.json();
 
-        // Filter backdrops only, verify we have at least 1. If not, retry.
         if (!imagesData.backdrops || imagesData.backdrops.length < 1) {
             console.log('Not enough images, retrying...');
+            currentRound--; // Don't count this attempt
             startNewRound();
             return;
         }
 
-        // Save current movie details
         currentMovie = movieBasic;
-
-        // Pick up to 3 random backdrops
-        // Sort by vote_average or just random? Random is better for difficulty.
-        // Or simply take top 3. Let's shuffle and take 3.
         const shuffled = imagesData.backdrops.sort(() => 0.5 - Math.random());
         currentBackdrops = shuffled.slice(0, 3);
-
-        // If we have fewer than 3, just repeat the last one or loop.
-        // But for UX, let's just use what we have.
 
         updateDisplay();
 
     } catch (e) {
         console.error(e);
-        alert("Erreur lors du chargement du film. Vérifiez votre connexion/Clé API.");
+        alert("Erreur. Rechargement...");
+        location.reload();
     }
 }
 
-function resetGameState() {
+function resetRoundState() {
     currentImageIndex = 0;
     guessInput.value = '';
     backdropDisplay.innerHTML = '';
@@ -183,9 +241,18 @@ function resetGameState() {
         ind.className = 'indicator';
         if (i === 0) ind.classList.add('active');
     });
+
     nextHintBtn.disabled = false;
     nextHintBtn.textContent = 'Indice Suivant (+1 Image)';
     skipBtn.disabled = false;
+}
+
+function updateRoundIndicator() {
+    if (maxRounds === Infinity) {
+        roundIndicator.textContent = `Manche ${currentRound}`;
+    } else {
+        roundIndicator.textContent = `Manche ${currentRound} / ${maxRounds}`;
+    }
 }
 
 function showLoading() {
@@ -199,24 +266,19 @@ function updateDisplay() {
     const imagePath = currentBackdrops[currentImageIndex].file_path;
     const fullUrl = `${IMAGE_BASE_URL}${imagePath}`;
 
-    // Preload image
     const img = new Image();
     img.src = fullUrl;
     img.className = 'game-image';
     img.onload = () => {
         backdropDisplay.innerHTML = '';
         backdropDisplay.appendChild(img);
-
-        // Update background overlay for immersion
         bgOverlay.style.backgroundImage = `url(${fullUrl})`;
     };
 
-    // Update indicators
     indicators.forEach((ind, i) => {
         if (i <= currentImageIndex) ind.classList.add('active');
     });
 
-    // Handle buttons
     if (currentImageIndex >= currentBackdrops.length - 1) {
         nextHintBtn.disabled = true;
         nextHintBtn.textContent = 'Dernière image';
@@ -230,58 +292,61 @@ function showNextImage() {
     }
 }
 
-
-function handleSkip() {
-    // Reveal everything
-    resultTitle.textContent = "Dommage !";
-    resultTitle.style.color = "#ff4d4d"; // Red
-    resultMovieTitle.textContent = currentMovie.title;
-    resultMessage.textContent = `La réponse était : ${currentMovie.title}.`;
-
-    if (currentMovie.poster_path) {
-        posterReveal.innerHTML = `<img src="https://image.tmdb.org/t/p/${POSTER_SIZE}${currentMovie.poster_path}" alt="Poster">`;
-    } else {
-        posterReveal.innerHTML = '';
-    }
-
-    // Reset score if wanted, or just don't increment
-    // score = 0; // Hardcore mode? Let's verify with user. For now, just no points.
-    // currentScoreEl.textContent = score;
-
-    resultModal.classList.remove('hidden');
-}
-
 function checkGuess() {
     const userGuess = guessInput.value.trim().toLowerCase();
     const correctTitle = currentMovie.title.toLowerCase();
 
-    // Simple normalization: remove accents, special chars
     const cleanUser = normalizeString(userGuess);
     const cleanTitle = normalizeString(correctTitle);
 
     if (cleanUser === cleanTitle) {
-        handleWin();
+        // Win
+        handleRoundEnd(true);
     } else {
-        // Simple shake animation on input
-        guessInput.style.borderColor = '#ff4d4d';
-        setTimeout(() => guessInput.style.borderColor = 'rgba(255, 255, 255, 0.1)', 500);
+        // Wrong
+        flashInputRed();
+
+        // Logic: if wrong, show next image automatically
+        if (currentImageIndex < currentBackdrops.length - 1) {
+            currentImageIndex++;
+            updateDisplay();
+        } else {
+            // If on last image and wrong -> Lost
+            handleRoundEnd(false);
+        }
     }
 }
 
-// Remove accents and special chars
-function normalizeString(str) {
-    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]/g, ""); // Keep only alphanumeric
+function flashInputRed() {
+    guessInput.style.borderColor = '#ff4d4d';
+    setTimeout(() => guessInput.style.borderColor = 'rgba(255, 255, 255, 0.1)', 500);
 }
 
-function handleWin() {
-    score++;
-    currentScoreEl.textContent = score;
+function handleRoundEnd(isWin, isSkip = false) {
+    let points = 0;
 
-    resultTitle.textContent = "Bravo !";
-    resultTitle.style.color = "#46d369";
+    if (isWin) {
+        // 1st img = 3pts (index 0)
+        // 2nd img = 2pts (index 1)
+        // 3rd img = 1pt  (index 2)
+        if (currentImageIndex === 0) points = 3;
+        if (currentImageIndex === 1) points = 2;
+        if (currentImageIndex === 2) points = 1;
+
+        score += points;
+        currentScoreEl.textContent = score;
+
+        resultTitle.textContent = "Bravo !";
+        resultTitle.style.color = "#46d369";
+        resultMessage.textContent = `+${points} points (${currentImageIndex + 1} image${currentImageIndex > 0 ? 's' : ''})`;
+    } else {
+        // Loss or Skip
+        resultTitle.textContent = isSkip ? "Puni !" : "Perdu !";
+        resultTitle.style.color = "#ff4d4d";
+        resultMessage.textContent = "0 point. La réponse était ci-dessous.";
+    }
+
     resultMovieTitle.textContent = currentMovie.title;
-    resultMessage.textContent = `Vous avez trouvé avec ${currentImageIndex + 1} image(s).`;
 
     if (currentMovie.poster_path) {
         posterReveal.innerHTML = `<img src="https://image.tmdb.org/t/p/${POSTER_SIZE}${currentMovie.poster_path}" alt="Poster">`;
@@ -289,7 +354,25 @@ function handleWin() {
         posterReveal.innerHTML = '';
     }
 
+    // Check if it's the absolute last round
+    if (maxRounds !== Infinity && currentRound >= maxRounds) {
+        nextMovieBtn.textContent = "Voir Résultat Final";
+    } else {
+        nextMovieBtn.textContent = "Film Suivant";
+    }
+
     resultModal.classList.remove('hidden');
+}
+
+function showGameOver() {
+    // Show a summary inside the same modal or alert, then reload
+    alert(`Partie terminée ! Score Final: ${score}`);
+    location.reload();
+}
+
+function normalizeString(str) {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, "");
 }
 
 // Autocomplete Logic
@@ -312,7 +395,6 @@ async function handleInput(e) {
         return;
     }
 
-    // Only search if we have a key
     if (!apiKey) return;
 
     try {
@@ -350,7 +432,5 @@ function displaySuggestions(movies) {
 function selectSuggestion(movie) {
     guessInput.value = movie.title;
     suggestionsList.classList.add('hidden');
-    // Optional: auto-submit or focus button
-    // checkGuess(); 
     guessInput.focus();
 }
