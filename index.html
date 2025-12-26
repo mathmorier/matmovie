@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CinéGuess - Le Jeu des Backdrops</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-overlay"></div>
+
+    <main class="app-container">
+        <!-- Login / API Key Screen -->
+        <section id="login-screen" class="screen active">
+            <div class="glass-panel text-center">
+                <h1>CinéGuess</h1>
+                <p>Devinez le film à partir de ses décors.</p>
+                <div class="input-group">
+                    <input type="text" id="api-key-input" placeholder="Entrez votre clé API TMDB">
+                    <button id="start-btn" class="btn-primary">Commencer</button>
+                    <p class="error-msg" id="login-error"></p>
+                </div>
+                <p class="small-text">Votre clé est stockée localement.</p>
+            </div>
+        </section>
+
+        <!-- Game Screen -->
+        <section id="game-screen" class="screen hidden">
+            <div class="game-header">
+                <div class="score-board">Score: <span id="current-score">0</span></div>
+                <button id="reset-key-btn" class="btn-text">Changer Clé API</button>
+            </div>
+
+            <div class="image-container">
+                <div class="image-wrapper" id="backdrop-display">
+                    <!-- Images will be injected here -->
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="image-indicators" id="image-indicators">
+                    <span class="indicator active" data-index="0">1</span>
+                    <span class="indicator" data-index="1">2</span>
+                    <span class="indicator" data-index="2">3</span>
+                </div>
+            </div>
+
+            <div class="controls-area">
+                <div class="input-with-btn">
+                    <div class="input-wrapper">
+                        <input type="text" id="guess-input" placeholder="Quel est ce film ?" autocomplete="off">
+                        <div id="suggestions-list" class="suggestions-list hidden"></div>
+                    </div>
+                    <button id="submit-guess-btn" class="btn-primary">Valider</button>
+                </div>
+                <div class="secondary-controls">
+                    <button id="next-hint-btn" class="btn-secondary">Indice Suivant (+1 Image)</button>
+                    <button id="skip-btn" class="btn-text" style="color: #666;">Je donne ma langue au chat</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Result Modal -->
+    <div id="result-modal" class="modal hidden">
+        <div class="modal-content glass-panel">
+            <h2 id="result-title">Gagné !</h2>
+            <p id="result-movie-title" class="movie-title">Titre du Film</p>
+            <div id="poster-reveal" class="poster-container"></div>
+            <p id="result-message">Vous avez trouvé en 2 images.</p>
+            <button id="next-movie-btn" class="btn-primary">Film Suivant</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
