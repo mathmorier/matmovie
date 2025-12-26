@@ -391,6 +391,11 @@ button:active {
     border: 1px solid var(--glass-border);
     max-width: 500px;
     width: 90%;
+    z-index: 101;
+    /* Ensure on top of everything inside modal wrapper */
+    position: relative;
+    padding: 30px;
+    border-radius: 20px;
 }
 
 .movie-title {

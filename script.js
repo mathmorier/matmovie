@@ -84,7 +84,7 @@ startBtn.addEventListener('click', async () => {
 });
 
 resetKeyBtn.addEventListener('click', () => {
-    localStorage.removeItem('tmdb_api_key');
+    // Just reload to go back to menu, keeping the key
     location.reload();
 });
 
@@ -144,7 +144,11 @@ async function fetchGenres(key) {
         const res = await fetch(`${TMDB_BASE_URL}/genre/movie/list?api_key=${key}&language=fr-FR`);
         const data = await res.json();
 
-        genreSelect.innerHTML = '<option value="">Tous les genres</option>';
+        genreSelect.innerHTML = `
+            <option value="popular">Les plus populaires</option>
+            <option value="top_rated">Les mieux notés</option>
+            <option value="">-- Tous les genres --</option>
+        `;
         data.genres.forEach(g => {
             const opt = document.createElement('option');
             opt.value = g.id;
@@ -196,11 +200,20 @@ async function startNewRound() {
     showLoading();
 
     try {
-        // Fetch logic with Genre
-        const genreParam = selectedGenre ? `&with_genres=${selectedGenre}` : '';
-        const randomPage = Math.floor(Math.random() * 50) + 1;
+        // Fetch logic with Genre or Special Category
+        const randomPage = Math.floor(Math.random() * 20) + 1;
+        let urlParams = `&language=fr-FR&page=${randomPage}&include_adult=false`;
 
-        const listRes = await fetch(`${TMDB_BASE_URL}/discover/movie?api_key=${apiKey}&language=fr-FR&page=${randomPage}&sort_by=popularity.desc&include_adult=false${genreParam}`);
+        if (selectedGenre === 'top_rated') {
+            urlParams += `&sort_by=vote_average.desc&vote_count.gte=1000`;
+        } else if (selectedGenre === 'popular' || !selectedGenre) {
+            urlParams += `&sort_by=popularity.desc`;
+        } else {
+            // It's a specific genre ID
+            urlParams += `&with_genres=${selectedGenre}&sort_by=popularity.desc`;
+        }
+
+        const listRes = await fetch(`${TMDB_BASE_URL}/discover/movie?api_key=${apiKey}${urlParams}`);
         const listData = await listRes.json();
 
         if (!listData.results || listData.results.length === 0) {
@@ -354,6 +367,14 @@ function handleRoundEnd(isWin, isSkip = false) {
         posterReveal.innerHTML = `<img src="https://image.tmdb.org/t/p/${POSTER_SIZE}${currentMovie.poster_path}" alt="Poster">`;
     } else {
         posterReveal.innerHTML = '';
+    }
+
+    // Update TMDB Link
+    if (currentMovie && currentMovie.id) {
+        tmdbLink.href = `https://www.themoviedb.org/movie/${currentMovie.id}`;
+        tmdbLink.style.display = 'block';
+    } else {
+        tmdbLink.style.display = 'none';
     }
 
     // Check if it's the absolute last round
